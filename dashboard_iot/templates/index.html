@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor de Calidad de Aire & Detección de Fuego | UPAO ML</title>
+  
+  <!-- CHART.JS SERVIDO 100% LOCAL Y OFFLINE DESDE TU COMPUTADORA -->
+  <script src="/static/chart.umd.min.js"></script>
+
+  <!-- ESTILOS PROFESIONALES DE UX/UI (TEMA BLANCO / SAAS CIENTÍFICO) -->
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --card-hover-border: #cbd5e1;
+      
+      --text-heading: #0f172a;
+      --text-body: #334155;
+      --text-muted: #64748b;
+      --text-subtle: #94a3b8;
+
+      --blue-primary: #2563eb;
+      --blue-soft: #eff6ff;
+      --blue-border: #bfdbfe;
+
+      --safe-color: #059669;
+      --safe-bg: #ecfdf5;
+      --safe-border: #a7f3d0;
+      --safe-text: #065f46;
+
+      --fire-color: #dc2626;
+      --fire-bg: #fef2f2;
+      --fire-border: #fecaca;
+      --fire-text: #991b1b;
+
+      --pm25-color: #0284c7;
+      --tvoc-color: #d97706;
+      --temp-color: #e11d48;
+      --hum-color: #4f46e5;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-body);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+    }
+
+    /* TOP NAVBAR */
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--card-border);
+      padding: 12px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #2563eb, #38bdf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+    }
+
+    .brand-icon svg {
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.2;
+    }
+
+    .brand-info h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-course {
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: #f1f5f9;
+      color: var(--text-muted);
+      border: 1px solid #cbd5e1;
+    }
+
+    .brand-info p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .brand-info p strong {
+      color: var(--safe-color);
+      font-weight: 600;
+    }
+
+    .header-pills {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .conn-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 20px;
+      background: #f8fafc;
+      color: var(--text-muted);
+      border: 1px solid var(--card-border);
+    }
+
+    .pulse-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--safe-color);
+      box-shadow: 0 0 6px var(--safe-color);
+    }
+
+    /* CONTENEDOR PRINCIPAL */
+    main {
+      max-width: 1360px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 22px 24px 44px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* BARRA COMPACTA DE ESTADO */
+    .status-strip {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+      transition: all 0.3s ease;
+    }
+
+    .status-strip.state-safe {
+      border-left: 4px solid var(--safe-color);
+    }
+
+    .status-strip.state-danger {
+      border-left: 4px solid var(--fire-color);
+      background: #fff8f8;
+      box-shadow: 0 0 20px rgba(220, 38, 38, 0.08);
+    }
+
+    .strip-details {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .strip-icon-box {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .strip-icon-box.safe {
+      background: var(--safe-bg);
+      color: var(--safe-color);
+      border: 1px solid var(--safe-border);
+    }
+
+    .strip-icon-box.danger {
+      background: var(--fire-bg);
+      color: var(--fire-color);
+      border: 1px solid var(--fire-border);
+    }
+
+    .strip-text-group h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      letter-spacing: -0.01em;
+    }
+
+    .strip-text-group p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .strip-right-metrics {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .s-metric {
+      text-align: right;
+    }
+
+    .s-metric-title {
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-subtle);
+    }
+
+    .s-metric-val {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-heading);
+    }
+
+    .actuator-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.74rem;
+      font-weight: 600;
+    }
+
+    .actuator-tag.safe {
+      background: var(--safe-bg);
+      color: var(--safe-text);
+      border: 1px solid var(--safe-border);
+    }
+
+    .actuator-tag.danger {
+      background: var(--fire-bg);
+      color: var(--fire-text);
+      border: 1px solid var(--fire-border);
+    }
+
+    /* GRID DE 6 TARJETAS DE SENSORES */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 14px;
+    }
+
+    @media (max-width: 1100px) {
+      .metrics-row { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 650px) {
+      .metrics-row { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .card:hover {
+      border-color: var(--card-hover-border);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+      transform: translateY(-1px);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    .card-top svg {
+      width: 17px;
+      height: 17px;
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .card-number {
+      font-size: 1.85rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin-top: 6px;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+    }
+
+    .card-unit {
+      font-size: 0.72rem;
+      color: var(--text-subtle);
+      margin-top: 4px;
+    }
+
+    .card-track {
+      width: 100%;
+      height: 4px;
+      background: #f1f5f9;
+      border-radius: 2px;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+
+    .card-bar {
+      height: 100%;
+      width: 0%;
+      transition: width 0.35s ease;
+    }
+
+    /* SECCIÓN DE 2 GRÁFICAS PARALELAS (CHART.JS) */
+    .charts-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 960px) {
+      .charts-container { grid-template-columns: 1fr; }
+    }
+
+    .chart-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+
+    .chart-panel-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .chart-panel-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-canvas-box {
+      position: relative;
+      width: 100%;
+      height: 230px;
+    }
+
+    /* TABLA DE AUDITORÍA */
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+
+    .table-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      margin-bottom: 12px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      max-height: 220px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75rem;
+      text-align: left;
+    }
+
+    thead th {
+      background: #f8fafc;
+      padding: 10px 14px;
+      color: var(--text-muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--card-border);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    tbody td {
+      padding: 8px 14px;
+      border-bottom: 1px solid #f1f5f9;
+      color: var(--text-heading);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    tbody tr:hover {
+      background: #f8fafc;
+    }
+
+    .badge-safe {
+      background: var(--safe-bg);
+      color: var(--safe-text);
+      border: 1px solid var(--safe-border);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .badge-danger {
+      background: var(--fire-bg);
+      color: var(--fire-text);
+      border: 1px solid var(--fire-border);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- BARRA DE NAVEGACIÓN -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+      </div>
+      <div class="brand-info">
+        <h1>
+          Monitor de Calidad de Aire & Detección de Fuego
+          <span class="badge-course">UPAO - Ciclo 8</span>
+        </h1>
+        <p>Inferencia en Tiempo Real • Modelo: <strong>DecisionTreeClassifier</strong> (F1: 100%)</p>
+      </div>
+    </div>
+
+    <div class="header-pills">
+      <div class="conn-badge">
+        <span class="pulse-indicator" id="status-dot"></span>
+        <span id="status-label">ESP32 Conectado (192.168.4.1)</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main>
+
+    <!-- BARRA COMPACTA DE ESTADO -->
+    <section id="banner-status" class="status-strip state-safe">
+      <div class="strip-details">
+        <div id="status-icon-box" class="strip-icon-box safe">
+          <svg id="status-svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+        </div>
+        <div class="strip-text-group">
+          <h2 id="status-title">Condición Ambiental Normal</h2>
+          <p id="status-desc">Valores estables de material particulado y gases. Sin presencia de humo.</p>
+        </div>
+      </div>
+
+      <div class="strip-right-metrics">
+        <div class="s-metric">
+          <div class="s-metric-title">Probabilidad</div>
+          <div class="s-metric-val" id="metric-prob" style="color:var(--safe-color);">0.0%</div>
+        </div>
+        <div class="s-metric">
+          <div class="s-metric-title">Actuadores Físicos</div>
+          <div id="metric-actuators" class="actuator-tag safe">LED Verde Activo • Buzzer Inactivo</div>
+        </div>
+        <div class="s-metric">
+          <div class="s-metric-title">Dispositivo</div>
+          <div class="s-metric-val" id="metric-dev" style="color:var(--blue-primary);font-size:0.98rem;">ESP32_AP_ML</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FILA DE 6 TARJETAS DE SENSORES -->
+    <section class="metrics-row">
+      <!-- CARD 1: PM2.5 -->
+      <div class="card">
+        <div class="card-top">
+          <span>PM2.5 (Partículas)</span>
+          <svg stroke="var(--pm25-color)" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+        </div>
+        <div class="card-number" id="val-pm25">0.05</div>
+        <div class="card-unit">ug/m³ (Humo fino)</div>
+        <div class="card-track"><div id="bar-pm25" class="card-bar" style="background:var(--pm25-color);width:5%;"></div></div>
+      </div>
+
+      <!-- CARD 2: TVOC -->
+      <div class="card">
+        <div class="card-top">
+          <span>TVOC (Gases)</span>
+          <svg stroke="var(--tvoc-color)" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div class="card-number" id="val-tvoc">10</div>
+        <div class="card-unit">ppb (Gases volátiles)</div>
+        <div class="card-track"><div id="bar-tvoc" class="card-bar" style="background:var(--tvoc-color);width:8%;"></div></div>
+      </div>
+
+      <!-- CARD 3: eCO2 -->
+      <div class="card">
+        <div class="card-top">
+          <span>eCO2 Estimado</span>
+          <svg stroke="#7c3aed" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <div class="card-number" id="val-eco2">400</div>
+        <div class="card-unit">ppm (Dióxido carbono)</div>
+        <div class="card-track"><div id="bar-eco2" class="card-bar" style="background:#7c3aed;width:15%;"></div></div>
+      </div>
+
+      <!-- CARD 4: TEMPERATURA -->
+      <div class="card">
+        <div class="card-top">
+          <span>Temperatura (DHT11)</span>
+          <svg stroke="var(--temp-color)" viewBox="0 0 24 24"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>
+        </div>
+        <div class="card-number" id="val-temp">30.8°C</div>
+        <div class="card-unit">Sensor Ambiental</div>
+        <div class="card-track"><div id="bar-temp" class="card-bar" style="background:var(--temp-color);width:65%;"></div></div>
+      </div>
+
+      <!-- CARD 5: HUMEDAD -->
+      <div class="card">
+        <div class="card-top">
+          <span>Humedad Relativa</span>
+          <svg stroke="var(--hum-color)" viewBox="0 0 24 24"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+        </div>
+        <div class="card-number" id="val-hum">54.0%</div>
+        <div class="card-unit">Sensor DHT11</div>
+        <div class="card-track"><div id="bar-hum" class="card-bar" style="background:var(--hum-color);width:54%;"></div></div>
+      </div>
+
+      <!-- CARD 6: SENSOR ANALÓGICO -->
+      <div class="card">
+        <div class="card-top">
+          <span>Sensor Aire (AOUT)</span>
+          <svg stroke="var(--safe-color)" viewBox="0 0 24 24"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/></svg>
+        </div>
+        <div class="card-number" id="val-raw">1260</div>
+        <div class="card-unit">ADC GPIO 34 (0-4095)</div>
+        <div class="card-track"><div id="bar-raw" class="card-bar" style="background:var(--safe-color);width:32%;"></div></div>
+      </div>
+    </section>
+
+    <!-- SECCIÓN DE 2 GRÁFICAS PARALELAS CON CHART.JS -->
+    <section class="charts-container">
+      <!-- GRÁFICA 1: GASES Y PM2.5 -->
+      <div class="chart-panel">
+        <div class="chart-panel-top">
+          <div class="chart-panel-title">
+            <svg width="18" height="18" fill="none" stroke="var(--pm25-color)" stroke-width="2.2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+            Evolución Temporal: PM2.5 y TVOC
+          </div>
+          <span style="font-size:0.72rem;font-weight:600;color:var(--text-muted);background:#f1f5f9;padding:2px 8px;border-radius:4px;">En vivo</span>
+        </div>
+        <div class="chart-canvas-box">
+          <canvas id="chartGases"></canvas>
+        </div>
+      </div>
+
+      <!-- GRÁFICA 2: CLIMA DHT11 -->
+      <div class="chart-panel">
+        <div class="chart-panel-top">
+          <div class="chart-panel-title">
+            <svg width="18" height="18" fill="none" stroke="var(--temp-color)" stroke-width="2.2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+            Evolución: Temperatura & Humedad (DHT11)
+          </div>
+          <span style="font-size:0.72rem;font-weight:600;color:var(--text-muted);background:#f1f5f9;padding:2px 8px;border-radius:4px;">En vivo</span>
+        </div>
+        <div class="chart-canvas-box">
+          <canvas id="chartClima"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- REGISTRO DE AUDITORÍA -->
+    <section class="table-card">
+      <div class="table-title">Registro Secuencial de Inferencia del Modelo</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Dispositivo</th>
+              <th>PM2.5</th>
+              <th>TVOC</th>
+              <th>eCO2</th>
+              <th>Temp</th>
+              <th>Humedad</th>
+              <th>Predicción ML</th>
+              <th>Probabilidad</th>
+              <th>IP Origen</th>
+            </tr>
+          </thead>
+          <tbody id="audit-table-body">
+            <!-- Filas en vivo -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- LÓGICA JAVASCRIPT CON CHART.JS (100% OFFLINE) -->
+  <script>
+    const maxDataPoints = 25;
+    const timeLabels = [];
+    const dataPM25 = [];
+    const dataTVOC = [];
+    const dataTemp = [];
+    const dataHum  = [];
+
+    // Inicializar buffers
+    for (let i = 0; i < maxDataPoints; i++) {
+      timeLabels.push("");
+      dataPM25.push(0.05);
+      dataTVOC.push(10);
+      dataTemp.push(30.8);
+      dataHum.push(54.0);
+    }
+
+    // 1. CONFIGURACIÓN DE GRÁFICA 1: PM2.5 Y TVOC (DOBLE EJE Y)
+    const ctxG = document.getElementById('chartGases').getContext('2d');
+    const chartGases = new Chart(ctxG, {
+      type: 'line',
+      data: {
+        labels: timeLabels,
+        datasets: [
+          {
+            label: 'PM2.5 (ug/m³)',
+            data: dataPM25,
+            borderColor: '#0284c7',
+            backgroundColor: 'rgba(2, 132, 199, 0.12)',
+            borderWidth: 2.5,
+            tension: 0.35,
+            fill: true,
+            pointRadius: 3,
+            pointHoverRadius: 6,
+            yAxisID: 'yPM'
+          },
+          {
+            label: 'TVOC (ppb)',
+            data: dataTVOC,
+            borderColor: '#d97706',
+            backgroundColor: 'rgba(217, 119, 6, 0.06)',
+            borderWidth: 2,
+            tension: 0.35,
+            fill: false,
+            pointRadius: 2.5,
+            yAxisID: 'yTVOC'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: {
+            grid: { color: 'rgba(0, 0, 0, 0.04)' },
+            ticks: { color: '#64748b', font: { size: 10 } }
+          },
+          yPM: {
+            type: 'linear',
+            position: 'left',
+            min: 0,
+            max: 5,
+            grid: { color: 'rgba(0, 0, 0, 0.04)' },
+            ticks: { color: '#0284c7', font: { size: 10 } },
+            title: { display: true, text: 'PM2.5', color: '#0284c7', font: { size: 10, weight: 'bold' } }
+          },
+          yTVOC: {
+            type: 'linear',
+            position: 'right',
+            min: 0,
+            max: 1500,
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#d97706', font: { size: 10 } },
+            title: { display: true, text: 'TVOC (ppb)', color: '#d97706', font: { size: 10, weight: 'bold' } }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: { color: '#334155', font: { size: 11, family: '"Segoe UI", sans-serif', weight: '600' } }
+          }
+        }
+      }
+    });
+
+    // 2. CONFIGURACIÓN DE GRÁFICA 2: TEMPERATURA Y HUMEDAD (DOBLE EJE Y)
+    const ctxC = document.getElementById('chartClima').getContext('2d');
+    const chartClima = new Chart(ctxC, {
+      type: 'line',
+      data: {
+        labels: timeLabels,
+        datasets: [
+          {
+            label: 'Temperatura (°C)',
+            data: dataTemp,
+            borderColor: '#e11d48',
+            backgroundColor: 'rgba(225, 29, 72, 0.08)',
+            borderWidth: 2.5,
+            tension: 0.35,
+            fill: false,
+            pointRadius: 3,
+            yAxisID: 'yTemp'
+          },
+          {
+            label: 'Humedad (%)',
+            data: dataHum,
+            borderColor: '#4f46e5',
+            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+            borderWidth: 2.5,
+            tension: 0.35,
+            fill: true,
+            pointRadius: 3,
+            yAxisID: 'yHum'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          x: {
+            grid: { color: 'rgba(0, 0, 0, 0.04)' },
+            ticks: { color: '#64748b', font: { size: 10 } }
+          },
+          yTemp: {
+            type: 'linear',
+            position: 'left',
+            min: 15,
+            max: 45,
+            grid: { color: 'rgba(0, 0, 0, 0.04)' },
+            ticks: { color: '#e11d48', font: { size: 10 } },
+            title: { display: true, text: '°C', color: '#e11d48', font: { size: 10, weight: 'bold' } }
+          },
+          yHum: {
+            type: 'linear',
+            position: 'right',
+            min: 20,
+            max: 100,
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#4f46e5', font: { size: 10 } },
+            title: { display: true, text: '% RH', color: '#4f46e5', font: { size: 10, weight: 'bold' } }
+          }
+        },
+        plugins: {
+          legend: {
+            labels: { color: '#334155', font: { size: 11, family: '"Segoe UI", sans-serif', weight: '600' } }
+          }
+        }
+      }
+    });
+
+    // 3. CONEXIÓN WEBSOCKET EN TIEMPO REAL
+    function connectRealTimeWS() {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${window.location.host}/ws`);
+
+      ws.onopen = () => {
+        document.getElementById('status-dot').style.background = '#059669';
+        document.getElementById('status-dot').style.boxShadow = '0 0 6px #059669';
+        document.getElementById('status-label').innerText = "ESP32 Conectado (En Vivo)";
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'NEW_READING') {
+            updateDashboard(msg.payload);
+          } else if (msg.type === 'INIT' && msg.history) {
+            msg.history.forEach(item => updateDashboard(item));
+          }
+        } catch(err) {}
+      };
+
+      ws.onclose = () => {
+        document.getElementById('status-dot').style.background = '#dc2626';
+        document.getElementById('status-dot').style.boxShadow = '0 0 6px #dc2626';
+        document.getElementById('status-label').innerText = "Reconectando con ESP32...";
+        setTimeout(connectRealTimeWS, 2000);
+      };
+    }
+
+    // 4. ACTUALIZACIÓN DE INTERFAZ Y GRÁFICAS
+    function updateDashboard(payload) {
+      const isFire = (payload.fire_alarm === 1);
+      const r = payload.readings || {};
+
+      // Barra Compacta de Estado
+      const banner = document.getElementById('banner-status');
+      const iconBox = document.getElementById('status-icon-box');
+      const title = document.getElementById('status-title');
+      const desc = document.getElementById('status-desc');
+      const prob = document.getElementById('metric-prob');
+      const act = document.getElementById('metric-actuators');
+
+      if (isFire) {
+        banner.className = "status-strip state-danger";
+        iconBox.className = "strip-icon-box danger";
+        iconBox.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>';
+        title.innerText = "Alerta: Detección de Humo o Combustión";
+        desc.innerText = "El modelo identificó una concentración crítica de material particulado y gases.";
+        prob.style.color = "var(--fire-color)";
+        prob.innerText = `${(payload.probability_fire * 100).toFixed(1)}%`;
+        act.className = "actuator-tag danger";
+        act.innerText = "LED Rojo Activo • Buzzer Activo";
+      } else {
+        banner.className = "status-strip state-safe";
+        iconBox.className = "strip-icon-box safe";
+        iconBox.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>';
+        title.innerText = "Condición Ambiental Normal";
+        desc.innerText = "Valores estables de material particulado y gases. Sin presencia de humo.";
+        prob.style.color = "var(--safe-color)";
+        prob.innerText = `${(payload.probability_fire * 100).toFixed(1)}%`;
+        act.className = "actuator-tag safe";
+        act.innerText = "LED Verde Activo • Buzzer Inactivo";
+      }
+
+      document.getElementById('metric-dev').innerText = payload.device_id || 'ESP32_AP_ML';
+
+      // KPI Numbers
+      const pm25 = parseFloat(r.pm2_5 || 0);
+      const tvoc = parseFloat(r.tvoc || 0);
+      const eco2 = parseFloat(r.eco2 || 400);
+      const temp = parseFloat(r.temperature || 30.8);
+      const hum = parseFloat(r.humidity || 54.0);
+      const raw = parseInt(r.raw_aire || 1260);
+
+      document.getElementById('val-pm25').innerText = pm25.toFixed(2);
+      document.getElementById('bar-pm25').style.width = Math.min((pm25 / 5.0) * 100, 100) + '%';
+
+      document.getElementById('val-tvoc').innerText = Math.round(tvoc);
+      document.getElementById('bar-tvoc').style.width = Math.min((tvoc / 1200) * 100, 100) + '%';
+
+      document.getElementById('val-eco2').innerText = Math.round(eco2);
+      document.getElementById('bar-eco2').style.width = Math.min((eco2 / 1000) * 100, 100) + '%';
+
+      document.getElementById('val-temp').innerText = temp.toFixed(1) + '°C';
+      document.getElementById('bar-temp').style.width = Math.min((temp / 50) * 100, 100) + '%';
+
+      document.getElementById('val-hum').innerText = hum.toFixed(1) + '%';
+      document.getElementById('bar-hum').style.width = Math.min(hum, 100) + '%';
+
+      document.getElementById('val-raw').innerText = raw;
+      document.getElementById('bar-raw').style.width = Math.min((raw / 3500) * 100, 100) + '%';
+
+      // Actualizar Gráficas Chart.js en tiempo real
+      if (timeLabels.length >= maxDataPoints) {
+        timeLabels.shift();
+        dataPM25.shift();
+        dataTVOC.shift();
+        dataTemp.shift();
+        dataHum.shift();
+      }
+
+      timeLabels.push(payload.timestamp || "");
+      dataPM25.push(pm25);
+      dataTVOC.push(tvoc);
+      dataTemp.push(temp);
+      dataHum.push(hum);
+
+      chartGases.update('none'); // Actualización fluida sin lag
+      chartClima.update('none');
+
+      // Fila de Tabla de Auditoría
+      const tbody = document.getElementById('audit-table-body');
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${payload.timestamp}</td>
+        <td><strong>${payload.device_id || 'ESP32'}</strong></td>
+        <td>${pm25.toFixed(2)}</td>
+        <td>${Math.round(tvoc)}</td>
+        <td>${Math.round(eco2)}</td>
+        <td>${temp.toFixed(1)}°C</td>
+        <td>${hum.toFixed(1)}%</td>
+        <td><span class="${isFire ? 'badge-danger' : 'badge-safe'}">${isFire ? 'ALARMA (1)' : 'NORMAL (0)'}</span></td>
+        <td>${(payload.probability_fire * 100).toFixed(1)}%</td>
+        <td>${payload.origin_ip || '192.168.4.1'}</td>
+      `;
+      tbody.insertBefore(tr, tbody.firstChild);
+      if (tbody.children.length > 20) {
+        tbody.removeChild(tbody.lastChild);
+      }
+    }
+
+    connectRealTimeWS();
+  </script>
+</body>
+</html>
