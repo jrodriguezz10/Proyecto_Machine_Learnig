@@ -2,6 +2,8 @@ import os
 import sys
 import time
 import socket
+import csv
+from threading import Lock
 from datetime import datetime
 from collections import deque
 from pathlib import Path
@@ -195,6 +197,76 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# ====================================================================
+# MONITOREO LOCAL Y REGISTRO DE INFERENCIAS
+# ====================================================================
+MONITOR_DIR = PROJECT_DIR / "monitoreo"
+REGISTRO_CSV = MONITOR_DIR / "registro_inferencias.csv"
+csv_lock = Lock()
+
+ultima_lectura_esp32: Optional[float] = None
+total_inferencias: int = 0
+total_alarmas: int = 0
+acumulador_latencias: List[float] = []
+
+COLUMNAS_MONITOREO = [
+    "timestamp",
+    "ip_origen",
+    "temperature",
+    "humidity",
+    "raw_aire",
+    "tvoc",
+    "pm2_5",
+    "eco2",
+    "tvoc_mean_5",
+    "prediccion",
+    "probabilidad",
+    "latencia_ms"
+]
+
+def registrar_inferencia_csv(
+    timestamp: str,
+    ip_origen: str,
+    temperature: float,
+    humidity: float,
+    raw_aire: Optional[float],
+    tvoc: float,
+    pm2_5: float,
+    eco2: float,
+    tvoc_mean_5: float,
+    prediccion: int,
+    probabilidad: float,
+    latencia_ms: float
+):
+    global total_inferencias, total_alarmas, acumulador_latencias, ultima_lectura_esp32
+    ultima_lectura_esp32 = time.time()
+    total_inferencias += 1
+    if prediccion == 1:
+        total_alarmas += 1
+    acumulador_latencias.append(latencia_ms)
+
+    MONITOR_DIR.mkdir(parents=True, exist_ok=True)
+    with csv_lock:
+        es_nuevo = not REGISTRO_CSV.exists()
+        with open(REGISTRO_CSV, mode="a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if es_nuevo:
+                writer.writerow(COLUMNAS_MONITOREO)
+            writer.writerow([
+                timestamp,
+                ip_origen,
+                round(temperature, 2),
+                round(humidity, 2),
+                raw_aire if raw_aire is not None else "",
+                round(tvoc, 2),
+                round(pm2_5, 3),
+                round(eco2, 2),
+                round(tvoc_mean_5, 2),
+                prediccion,
+                round(probabilidad, 4),
+                round(latencia_ms, 4)
+            ])
+
 # Modelo de datos de entrada desde ESP32
 class LecturaSensor(BaseModel):
     temperature: float = Field(..., example=24.5)
@@ -205,10 +277,12 @@ class LecturaSensor(BaseModel):
     raw_ethanol: float = Field(default=19400.0, example=19450.0)
     pressure: float = Field(default=939.5, example=939.5)
     pm1_0: float = Field(..., example=1.5)
-    pm2_5: float = Field(..., example=1.8)
+    pm2_5: float = Field(default=0.0, example=1.8)
+    pm25: Optional[float] = Field(default=None, example=1.8)
     nc0_5: float = Field(default=10.0, example=11.2)
     nc1_0: float = Field(default=1.5, example=1.7)
     nc2_5: float = Field(default=0.04, example=0.04)
+    raw_aire: Optional[float] = Field(default=None, example=1260.0)
     device_id: Optional[str] = "ESP32_UPAO"
 
 # ====================================================================
@@ -224,6 +298,32 @@ def get_info():
         "features_count": len(FEATURE_NAMES)
     }
 
+@app.get("/api/health")
+def get_health():
+    """
+    Monitoreo de salud del servicio de inferencia y conectividad del ESP32.
+    """
+    ahora = time.time()
+    if ultima_lectura_esp32 is not None:
+        segundos_desde_ultima = round(ahora - ultima_lectura_esp32, 2)
+        esp32_conectado = bool(segundos_desde_ultima <= 5.0)
+    else:
+        segundos_desde_ultima = None
+        esp32_conectado = False
+
+    latencia_promedio = round(float(np.mean(acumulador_latencias)), 4) if acumulador_latencias else 0.0
+    porcentaje_alarmas = round((total_alarmas / total_inferencias * 100.0), 2) if total_inferencias > 0 else 0.0
+
+    return {
+        "estado_modelo": "cargado" if modelo is not None else "no_cargado",
+        "modelo": type(modelo).__name__,
+        "segundos_desde_ultima_lectura": segundos_desde_ultima,
+        "esp32_conectado": esp32_conectado,
+        "total_inferencias": total_inferencias,
+        "latencia_promedio": latencia_promedio,
+        "porcentaje_alarmas": porcentaje_alarmas
+    }
+
 @app.post("/api/predict")
 async def predict_sensor_data(lectura: LecturaSensor, request: Request):
     """
@@ -235,7 +335,8 @@ async def predict_sensor_data(lectura: LecturaSensor, request: Request):
     # Inferencia del modelo de ML
     prediccion = int(modelo.predict(df_features)[0])
     
-    # Probabilidad si el modelo la soporta
+    # Medición de latencia_ms con time.perf_counter() alrededor de predict_proba
+    t0 = time.perf_counter()
     probabilidad = 1.0 if prediccion == 1 else 0.0
     if hasattr(modelo, "predict_proba"):
         try:
@@ -243,8 +344,34 @@ async def predict_sensor_data(lectura: LecturaSensor, request: Request):
             probabilidad = float(prob_arr[1])
         except Exception:
             pass
+    latencia_ms = (time.perf_counter() - t0) * 1000.0
 
-    hora_actual = datetime.now().strftime("%H:%M:%S")
+    hora_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ip_cliente = request.client.host if request.client else "local"
+
+    # Registrar en monitoreo/registro_inferencias.csv
+    raw_aire_val = datos_dict.get("raw_aire")
+    if raw_aire_val is None:
+        raw_aire_val = datos_dict.get("rawAire")
+
+    pm25_val = datos_dict.get("pm2_5")
+    if pm25_val is None:
+        pm25_val = datos_dict.get("pm25", 0.0)
+
+    registrar_inferencia_csv(
+        timestamp=hora_actual,
+        ip_origen=ip_cliente,
+        temperature=float(datos_dict.get("temperature", 0.0)),
+        humidity=float(datos_dict.get("humidity", 0.0)),
+        raw_aire=float(raw_aire_val) if raw_aire_val is not None else None,
+        tvoc=float(datos_dict.get("tvoc", 0.0)),
+        pm2_5=float(pm25_val),
+        eco2=float(datos_dict.get("eco2", 0.0)),
+        tvoc_mean_5=float(features_calc.get("tvoc_mean_5", 0.0)),
+        prediccion=prediccion,
+        probabilidad=probabilidad,
+        latencia_ms=latencia_ms
+    )
     
     # Respuesta estructurada para el ESP32 y el Dashboard
     resultado = {
@@ -255,7 +382,7 @@ async def predict_sensor_data(lectura: LecturaSensor, request: Request):
         "action": "TRIGGER_BUZZER_AND_LED" if prediccion == 1 else "NORMAL_MONITORING",
         "message": "PELIGRO: Humo o combustión detectada!" if prediccion == 1 else "Aire limpio / Condiciones normales",
         "timestamp": hora_actual,
-        "origin_ip": request.client.host if request.client else "local",
+        "origin_ip": ip_cliente,
         "device_id": lectura.device_id,
         "readings": datos_dict
     }
@@ -356,17 +483,37 @@ async def polling_esp32_ap():
                 data = resp.json()
                 lectura = LecturaSensor(**data)
                 datos_dict = lectura.model_dump()
-                df_features, _ = historial.procesar_lectura(datos_dict)
+                df_features, features_calc = historial.procesar_lectura(datos_dict)
 
                 prediccion = int(modelo.predict(df_features)[0])
+                
+                t0 = time.perf_counter()
                 probabilidad = 1.0 if prediccion == 1 else 0.0
                 if hasattr(modelo, "predict_proba"):
                     try:
                         probabilidad = float(modelo.predict_proba(df_features)[0][1])
                     except Exception:
                         pass
+                latencia_ms = (time.perf_counter() - t0) * 1000.0
 
-                hora_actual = datetime.now().strftime("%H:%M:%S")
+                hora_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                raw_aire_val = data.get("raw_aire", data.get("rawAire"))
+
+                registrar_inferencia_csv(
+                    timestamp=hora_actual,
+                    ip_origen="192.168.4.1",
+                    temperature=float(data.get("temperature", 0.0)),
+                    humidity=float(data.get("humidity", 0.0)),
+                    raw_aire=float(raw_aire_val) if raw_aire_val is not None else None,
+                    tvoc=float(data.get("tvoc", 0.0)),
+                    pm2_5=float(data.get("pm2_5", data.get("pm25", 0.0))),
+                    eco2=float(data.get("eco2", 0.0)),
+                    tvoc_mean_5=float(features_calc.get("tvoc_mean_5", 0.0)),
+                    prediccion=prediccion,
+                    probabilidad=probabilidad,
+                    latencia_ms=latencia_ms
+                )
+
                 resultado = {
                     "status": "ok",
                     "fire_alarm": prediccion,

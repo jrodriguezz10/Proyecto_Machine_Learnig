@@ -1,0 +1,54 @@
+=====================================================================================
+SISTEMA DE MONITOREO CONTINUO DE INFERENCIA Y DRIFT (09_monitoreo.py)
+=====================================================================================
+
+1. RESUMEN GENERAL DE OPERACIÓN
+-----------------------------------------------------------------
+Número total de inferencias       : 307
+Inicio de sesión                  : 2026-11-07 21:23:46
+Fin de sesión                     : 2026-11-07 21:26:41
+Duración de la sesión             : 2 min 55 s (175.0 s)
+Frecuencia media de inferencia    : 1.75 lecturas/s
+Eventos de alarma disparados      : 33 (10.75 %)
+Latencia de inferencia media      : 0.8133 ms
+Latencia Percentil 95 (P95)       : 1.0987 ms
+Latencia máxima observada         : 4.7481 ms
+Huecos > 5 s sin lecturas         : 0 evento(s)
+
+Resumen de episodios de alarma : 1 episodio(s) detectado(s)
+  - Episodio 1:
+      Hora de inicio : 2026-11-07 21:26:19
+      Hora de fin    : 2026-11-07 21:26:41
+      Duración       : 22.0 s (33 lecturas consecutivas)
+      TVOC máximo    : 793.10 ppb
+      raw_aire máximo: 2395.0
+
+2. ESTADO DE SALUD DE SENSORES FÍSICOS
+-----------------------------------------------------------------
+Temperatura fuera de rango (0 - 50 °C) : 0 muestra(s) [CORRECTO]
+Humedad fuera de rango (20 - 95 %)     : 0 muestra(s) [CORRECTO]
+
+Auditoría de congelamiento de señal (umbral > 30 lecturas idénticas):
+  - temperature   : Estable / Normal                   (máx. repeticiones consecutivas: 7)
+  - humidity      : Estable (resolución DHT11 1 %)     (máx. repeticiones consecutivas: 137)
+  - tvoc          : Línea base (sensor en reposo)      (máx. repeticiones consecutivas: 271)
+  - eco2          : Línea base (sensor en reposo)      (máx. repeticiones consecutivas: 271)
+  - raw_aire      : Estable / Normal                   (máx. repeticiones consecutivas: 7)
+  - pm2_5         : Línea base (sensor en reposo)      (máx. repeticiones consecutivas: 271)
+
+3. EVALUACIÓN DE DATA DRIFT RESPECTO AL DATASET DE ENTRENAMIENTO
+-------------------------------------------------------------------------------------
+Variable       Media Train    Media Vivo     KS Stat    p-valor      PSI (10)   Estado         
+-------------------------------------------------------------------------------------
+Temperature    15.9704        29.8785        0.9509     0.0000e+00   8.2703     Drift          
+Humidity       48.5395        61.8013        0.9792     0.0000e+00   8.2767     Drift          
+TVOC           1942.0575      83.1762        0.8173     3.0892e-224  6.8120     Drift          
+eCO2           670.0210       423.5199       0.3730     9.8132e-39   1.1276     Drift          
+-------------------------------------------------------------------------------------
+Criterio PSI: Estable (< 0.10) | Moderado (0.10 - 0.25) | Drift (> 0.25)
+
+4. GENERACIÓN DE GRÁFICOS DIAGNÓSTICOS EN monitoreo/
+-----------------------------------------------------------------
+  [OK] Guardado: probabilidad_prediccion_tiempo.png
+  [OK] Guardado: latencia_tiempo.png
+  [OK] Guardado: histograma_comparativo_temperatura_tvoc.png
