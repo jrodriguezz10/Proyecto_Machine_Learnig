@@ -18,7 +18,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 from dotenv import load_dotenv
-from google import genai
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 # ====================================================================
 # 1. CONFIGURACIÓN Y RUTAS
@@ -298,6 +302,12 @@ def consultar_gemini_explicacion(datos_inferencia: dict) -> str:
     global ultima_explicacion_ia
     t0_gem = time.perf_counter()
     ahora_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if genai is None:
+        error_msg = "Librería google-genai no disponible o no instalada"
+        registrar_gemini_csv(ahora_str, 0.0, "no", error_msg)
+        ultima_explicacion_ia = "Explicación no disponible: servicio cognitivo sin conexión"
+        return ultima_explicacion_ia
 
     if not GEMINI_API_KEY or GEMINI_API_KEY.strip() == "" or GEMINI_API_KEY == "PEGAR_AQUI":
         error_msg = "Clave GEMINI_API_KEY no configurada o vacía en .env"
