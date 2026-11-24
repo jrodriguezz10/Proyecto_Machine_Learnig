@@ -142,13 +142,13 @@ def ejecutar_interpretabilidad():
     print("=" * 85)
 
     perm_dt = permutation_importance(
-        dt, X_test, y_test, scoring="f1_macro", n_repeats=10, random_state=42, n_jobs=-1
+        dt, X_test, y_test, scoring="f1_macro", n_repeats=10, random_state=42, n_jobs=1
     )
     perm_rf = permutation_importance(
-        rf, X_test, y_test, scoring="f1_macro", n_repeats=10, random_state=42, n_jobs=-1
+        rf, X_test, y_test, scoring="f1_macro", n_repeats=10, random_state=42, n_jobs=1
     )
     perm_svm = permutation_importance(
-        svm, X_test_scaled, y_test, scoring="f1_macro", n_repeats=10, random_state=42, n_jobs=-1
+        svm, X_test_scaled, y_test, scoring="f1_macro", n_repeats=10, random_state=42, n_jobs=1
     )
 
     df_perm = pd.DataFrame({
@@ -249,7 +249,7 @@ def ejecutar_interpretabilidad():
             "Árbol de Decisión": DecisionTreeClassifier(criterion="entropy", max_depth=5, random_state=42),
             "Random Forest": RandomForestClassifier(
                 n_estimators=300, min_samples_split=5, min_samples_leaf=2,
-                max_features="sqrt", class_weight="balanced", random_state=42, n_jobs=-1
+                max_features="sqrt", class_weight="balanced", random_state=42, n_jobs=1
             )
         }
 
@@ -434,5 +434,22 @@ def ejecutar_interpretabilidad():
             print(f"  Paso {step}: [Nodo {node_id}] {feat_name} ({val_sample:.4f}) {decision}")
 
 
+class DualLogger:
+    def __init__(self, filepath):
+        self.terminal = sys.stdout
+        self.log = open(filepath, "w", encoding="utf-8")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+
 if __name__ == "__main__":
+    ruta_salida = DIR_RESULTADOS / "salida_08.txt"
+    sys.stdout = DualLogger(ruta_salida)
     ejecutar_interpretabilidad()
+    print(f"\n[OK] Salida completa guardada en: {ruta_salida}")

@@ -1,0 +1,89 @@
+=====================================================================================
+TAREA 1: ENTRENAMIENTO Y EVALUACIÓN DE RED NEURONAL MLP (10_red_neuronal.py)
+=====================================================================================
+
+1. CARGA DE PARTICIONES ESTANDARIZADAS
+-----------------------------------------------------------------
+X_train_scaled: (43841, 21)
+X_val_scaled  : (9394, 21)
+X_test_scaled : (9395, 21)
+Características (21): ['Temperature[C]', 'Humidity[%]', 'TVOC[ppb]', 'eCO2[ppm]', 'Raw H2', 'Raw Ethanol', 'Pressure[hPa]', 'PM1.0', 'PM2.5', 'NC0.5', 'NC1.0', 'NC2.5', 'pm_ratio', 'pm25_delta', 'tvoc_delta', 'eco2_delta', 'temp_delta', 'humidity_delta', 'pm25_mean_5', 'tvoc_mean_5', 'eco2_mean_5']
+
+2. BÚSQUEDA DE HIPERPARÁMETROS (RandomizedSearchCV)
+-----------------------------------------------------------------
+Iniciando búsqueda aleatoria de hiperparámetros (10 iteraciones, 5 folds)...
+Fitting 5 folds for each of 10 candidates, totalling 50 fits
+
+Resultados del Entrenamiento:
+  - Mejores hiperparámetros: {'learning_rate_init': 0.005, 'hidden_layer_sizes': (64, 32), 'alpha': 0.0001}
+  - F1 Macro CV (5-fold)   : 0.9994
+  - F1 Macro en Validación : 0.9993
+  - Tiempo de entrenamiento: 198.35 s
+
+3. EVALUACIÓN EN CONJUNTO DE TEST (Prueba Ciega)
+-----------------------------------------------------------------
+  - Accuracy              : 0.9995
+  - Precision Macro       : 0.9993
+  - Recall Macro          : 0.9994
+  - F1 Macro              : 0.9993
+  - Recall Clase Alarma (1): 0.9996
+  - Falsos Negativos (FN) : 3
+  - Falsos Positivos (FP) : 2
+  - ROC-AUC               : 0.9999
+
+Matriz de Confusión en TEST:
+                Pred 0 (Normal)   Pred 1 (Alarma)
+Real 0 (Normal)      2679              2
+Real 1 (Alarma)      3                 6711
+
+4. LATENCIA DE PREDICCIÓN POR OBSERVACIÓN
+-----------------------------------------------------------------
+Tiempo total para 1000 observaciones: 1.2297 ms
+Tiempo medio de predicción por obs   : 0.0012 ms
+
+5. VALIDACIÓN CRUZADA LEAVE-ONE-GROUP-OUT (LOGO) POR SESIONES
+-----------------------------------------------------------------
+
+--- LOGO Esquema: a) 21 Variables (Completas) ---
+Sesión   N Total    Clase 0    Clase 1    F1 Macro     Recall Alarma    FN      FP      Observación         
+------------------------------------------------------------------------------------------------------
+0        24994      3178       21816      0.1269       0.1068           19485   2266    Biclase             
+1        24994      3178       21816      0.6402       0.6776           7034    15      Biclase             
+2        1154       33         1121       0.0278       0.0000           1121    0       Biclase             
+3        5744       5742       2          0.4316       0.0000           2       1381    Biclase             
+4        5744       5742       2          0.4556       0.0000           2       935     Biclase             
+------------------------------------------------------------------------------------------------------
+PROMEDIO                                   0.3364           0.1569     5528.8  919.4   Acc prom=0.4945
+
+--- LOGO Esquema: b) 20 Variables (Sin Pressure[hPa]) ---
+Sesión   N Total    Clase 0    Clase 1    F1 Macro     Recall Alarma    FN      FP      Observación         
+------------------------------------------------------------------------------------------------------
+0        24994      3178       21816      0.1411       0.1227           19140   2226    Biclase             
+1        24994      3178       21816      0.6228       0.6540           7548    17      Biclase             
+2        1154       33         1121       0.1454       0.1481           955     15      Biclase             
+3        5744       5742       2          0.4410       0.0000           2       1211    Biclase             
+4        5744       5742       2          0.4412       0.0000           2       1207    Biclase             
+------------------------------------------------------------------------------------------------------
+PROMEDIO                                   0.3583           0.1850     5529.4  935.2   Acc prom=0.5161
+
+--- LOGO Esquema: c) 7 Variables del Prototipo ---
+Sesión   N Total    Clase 0    Clase 1    F1 Macro     Recall Alarma    FN      FP      Observación         
+------------------------------------------------------------------------------------------------------
+0        24994      3178       21816      0.1651       0.1018           19596   1268    Biclase             
+1        24994      3178       21816      0.6535       0.6951           6652    13      Biclase             
+2        1154       33         1121       0.0632       0.0375           1079    2       Biclase             
+3        5744       5742       2          0.3465       0.0000           2       2696    Biclase             
+4        5744       5742       2          0.2732       0.0000           2       3583    Biclase             
+------------------------------------------------------------------------------------------------------
+PROMEDIO                                   0.3003           0.1669     5466.2 1512.4   Acc prom=0.3736
+
+6. GUARDADO DE ARTEFACTOS Y GRÁFICOS
+-----------------------------------------------------------------
+  [OK] Modelo guardado en: D:\UPAO 2026\CICLO 8\ML\Proyecto\Data set\archive (5)\modelos\mlp.joblib
+  [OK] Matriz de confusión guardada en: D:\UPAO 2026\CICLO 8\ML\Proyecto\Data set\archive (5)\resultados_evaluacion\red_neuronal\matriz_confusion_mlp.png
+  [OK] Curva de pérdida guardada en: D:\UPAO 2026\CICLO 8\ML\Proyecto\Data set\archive (5)\resultados_evaluacion\red_neuronal\curva_perdida_mlp.png
+  [OK] Salida completa guardada en: D:\UPAO 2026\CICLO 8\ML\Proyecto\Data set\archive (5)\resultados_evaluacion\red_neuronal\salida_10.txt
+
+=====================================================================================
+EJECUCIÓN DE 10_RED_NEURONAL.PY COMPLETADA EXITOSAMENTE
+=====================================================================================

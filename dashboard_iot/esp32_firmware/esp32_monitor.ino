@@ -32,7 +32,8 @@
 // 1. CONFIGURACIÓN DEL WI-FI EMITIDO POR EL ESP32
 // ========================================================================
 const char* ap_ssid     = "ML";
-const char* ap_password = "12345678";
+const char* ap_password = "SmokeGuard2026";
+const char* API_KEY     = "c45ae948e676f03d5c12044634f705de";
 
 WebServer server(80);
 
@@ -204,6 +205,7 @@ void loop() {
       HTTPClient http;
       http.begin("http://192.168.4.2:8000/api/predict");
       http.addHeader("Content-Type", "application/json");
+      http.addHeader("X-API-Key", API_KEY);
 
       String jsonPayload = "{";
       jsonPayload += "\"temperature\":" + String(temp, 2) + ",";

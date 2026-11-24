@@ -17,6 +17,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
+from dotenv import load_dotenv
+from google import genai
 
 # ====================================================================
 # 1. CONFIGURACIÓN Y RUTAS
@@ -24,6 +26,12 @@ import uvicorn
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = BASE_DIR.parent
 MODEL_PATH = PROJECT_DIR / "modelos" / "modelo_mejor_validacion.joblib"
+
+# Cargar variables de entorno desde ../.env de forma absoluta
+ENV_PATH = PROJECT_DIR / ".env"
+load_dotenv(dotenv_path=ENV_PATH)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+API_KEY_ESP32 = os.getenv("API_KEY_ESP32", "")
 
 if not MODEL_PATH.exists():
     MODEL_PATH = PROJECT_DIR / "modelos" / "decision_tree.joblib"
@@ -202,12 +210,15 @@ manager = ConnectionManager()
 # ====================================================================
 MONITOR_DIR = PROJECT_DIR / "monitoreo"
 REGISTRO_CSV = MONITOR_DIR / "registro_inferencias.csv"
+REGISTRO_GEMINI_CSV = MONITOR_DIR / "registro_gemini.csv"
 csv_lock = Lock()
 
 ultima_lectura_esp32: Optional[float] = None
 total_inferencias: int = 0
 total_alarmas: int = 0
 acumulador_latencias: List[float] = []
+ultima_prediccion_global: int = 0
+ultima_explicacion_ia: str = "Esperando inferencias del sistema..."
 
 COLUMNAS_MONITOREO = [
     "timestamp",
@@ -267,6 +278,78 @@ def registrar_inferencia_csv(
                 round(latencia_ms, 4)
             ])
 
+
+def registrar_gemini_csv(fecha_hora: str, latencia_ms: float, exito: str, texto_o_error: str):
+    MONITOR_DIR.mkdir(parents=True, exist_ok=True)
+    with csv_lock:
+        es_nuevo = not REGISTRO_GEMINI_CSV.exists()
+        with open(REGISTRO_GEMINI_CSV, mode="a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if es_nuevo:
+                writer.writerow(["fecha_hora", "latencia_ms", "exito", "texto_o_error"])
+            writer.writerow([fecha_hora, round(latencia_ms, 2), exito, texto_o_error])
+
+
+def consultar_gemini_explicacion(datos_inferencia: dict) -> str:
+    """
+    Solicita a Gemini una explicación concisa (2 a 3 frases) en español para un ciudadano.
+    Indica que el sistema es experimental y no reemplaza un detector de humo certificado.
+    """
+    global ultima_explicacion_ia
+    t0_gem = time.perf_counter()
+    ahora_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if not GEMINI_API_KEY or GEMINI_API_KEY.strip() == "" or GEMINI_API_KEY == "PEGAR_AQUI":
+        error_msg = "Clave GEMINI_API_KEY no configurada o vacía en .env"
+        registrar_gemini_csv(ahora_str, 0.0, "no", error_msg)
+        ultima_explicacion_ia = "Explicación no disponible: servicio cognitivo sin conexión"
+        return ultima_explicacion_ia
+
+    pred_val = datos_inferencia.get("prediccion", datos_inferencia.get("fire_alarm", 0))
+    prob_val = datos_inferencia.get("probabilidad", datos_inferencia.get("probability_fire", 0.0))
+
+    prompt = (
+        "Eres un asistente de seguridad ambiental para un sistema experimental de detección temprana de incendios con IoT y Machine Learning. "
+        "AVISO OBLIGATORIO: Este prototipo es académico experimental y no reemplaza a un detector de humo certificado por normas de seguridad. "
+        f"Datos del sensor en tiempo real: "
+        f"Temperatura: {datos_inferencia.get('temperature', 24.0)} °C, "
+        f"Humedad: {datos_inferencia.get('humidity', 50.0)} %, "
+        f"TVOC (gases volátiles): {datos_inferencia.get('tvoc', 10.0)} ppb, "
+        f"eCO2: {datos_inferencia.get('eco2', 400.0)} ppm, "
+        f"PM2.5: {datos_inferencia.get('pm2_5', 0.05)} ug/m3, "
+        f"Gas analógico MP503 (raw_aire): {datos_inferencia.get('raw_aire', 'N/D')}. "
+        f"Diagnóstico del modelo ML: {'PELIGRO DE INCENDIO / COMBUSTIÓN DETECTADA' if pred_val == 1 else 'CONDICIÓN NORMAL / AIRE LIMPIO'}, "
+        f"Probabilidad de alarma: {float(prob_val) * 100:.1f} %. "
+        "Redacta una explicación en español de exactamente 2 a 3 frases dirigida a un ciudadano común: "
+        "1) qué detectó el sensor en el aire, 2) nivel de riesgo actual, y 3) recomendación preventiva inmediata."
+    )
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        texto = None
+        # Probar modelos compatibles con la API
+        for modelo_nombre in ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.8-flash"]:
+            try:
+                resp = client.models.generate_content(model=modelo_nombre, contents=prompt)
+                if resp and resp.text:
+                    texto = resp.text.strip()
+                    break
+            except Exception:
+                continue
+
+        lat_gem_ms = (time.perf_counter() - t0_gem) * 1000.0
+        if texto:
+            registrar_gemini_csv(ahora_str, lat_gem_ms, "sí", texto)
+            ultima_explicacion_ia = texto
+            return texto
+        else:
+            raise RuntimeError("Respuesta vacía de los modelos Gemini disponibles")
+    except Exception as e:
+        lat_gem_ms = (time.perf_counter() - t0_gem) * 1000.0
+        registrar_gemini_csv(ahora_str, lat_gem_ms, "no", str(e))
+        ultima_explicacion_ia = "Explicación no disponible: servicio cognitivo sin conexión"
+        return ultima_explicacion_ia
+
 # Modelo de datos de entrada desde ESP32
 class LecturaSensor(BaseModel):
     temperature: float = Field(..., example=24.5)
@@ -324,19 +407,22 @@ def get_health():
         "porcentaje_alarmas": porcentaje_alarmas
     }
 
-@app.post("/api/predict")
-async def predict_sensor_data(lectura: LecturaSensor, request: Request):
+async def procesar_inferencia_completa(datos_dict: dict, ip_cliente: str, device_id: Optional[str] = "ESP32_UPAO"):
     """
-    Endpoint principal para recibir datos desde el ESP32 o simulador.
+    Función central de procesamiento de inferencia:
+    - Preprocesamiento y cálculo de deltas/medias móviles en buffer
+    - Medición de latencia conjunta de predict y predict_proba
+    - Registro en CSV
+    - Llamada automática a Gemini solo en transición 0 -> 1
+    - Emisión a WebSocket
     """
-    datos_dict = lectura.model_dump() if hasattr(lectura, "model_dump") else lectura.dict()
+    global ultima_prediccion_global, ultima_explicacion_ia
+
     df_features, features_calc = historial.procesar_lectura(datos_dict)
 
-    # Inferencia del modelo de ML
+    # Medición de latencia alrededor de predict y predict_proba juntos
+    t0_inf = time.perf_counter()
     prediccion = int(modelo.predict(df_features)[0])
-    
-    # Medición de latencia_ms con time.perf_counter() alrededor de predict_proba
-    t0 = time.perf_counter()
     probabilidad = 1.0 if prediccion == 1 else 0.0
     if hasattr(modelo, "predict_proba"):
         try:
@@ -344,12 +430,11 @@ async def predict_sensor_data(lectura: LecturaSensor, request: Request):
             probabilidad = float(prob_arr[1])
         except Exception:
             pass
-    latencia_ms = (time.perf_counter() - t0) * 1000.0
+    latencia_ms = (time.perf_counter() - t0_inf) * 1000.0
 
     hora_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    ip_cliente = request.client.host if request.client else "local"
 
-    # Registrar en monitoreo/registro_inferencias.csv
+    # Obtener valores crudos y de partículas
     raw_aire_val = datos_dict.get("raw_aire")
     if raw_aire_val is None:
         raw_aire_val = datos_dict.get("rawAire")
@@ -358,6 +443,7 @@ async def predict_sensor_data(lectura: LecturaSensor, request: Request):
     if pm25_val is None:
         pm25_val = datos_dict.get("pm25", 0.0)
 
+    # Registrar en monitoreo/registro_inferencias.csv
     registrar_inferencia_csv(
         timestamp=hora_actual,
         ip_origen=ip_cliente,
@@ -372,19 +458,35 @@ async def predict_sensor_data(lectura: LecturaSensor, request: Request):
         probabilidad=probabilidad,
         latencia_ms=latencia_ms
     )
-    
+
+    # Llamada automática a Gemini SOLO cuando la predicción cambie de 0 a 1
+    explicacion_nueva = None
+    if prediccion == 1 and ultima_prediccion_global == 0:
+        datos_para_explicar = {
+            **datos_dict,
+            "prediccion": prediccion,
+            "probabilidad": probabilidad
+        }
+        explicacion_nueva = await asyncio.to_thread(consultar_gemini_explicacion, datos_para_explicar)
+        ultima_explicacion_ia = explicacion_nueva
+    ultima_prediccion_global = prediccion
+
+    texto_ia = explicacion_nueva or ultima_explicacion_ia
+
     # Respuesta estructurada para el ESP32 y el Dashboard
     resultado = {
         "status": "ok",
         "fire_alarm": prediccion,
         "alarm_active": bool(prediccion == 1),
         "probability_fire": round(probabilidad, 4),
+        "latencia_ms": round(latencia_ms, 4),
         "action": "TRIGGER_BUZZER_AND_LED" if prediccion == 1 else "NORMAL_MONITORING",
         "message": "PELIGRO: Humo o combustión detectada!" if prediccion == 1 else "Aire limpio / Condiciones normales",
         "timestamp": hora_actual,
         "origin_ip": ip_cliente,
-        "device_id": lectura.device_id,
-        "readings": datos_dict
+        "device_id": device_id,
+        "readings": datos_dict,
+        "explicacion_ia": texto_ia
     }
 
     # Guardar en historial de memoria para recargas rápidas
@@ -393,14 +495,71 @@ async def predict_sensor_data(lectura: LecturaSensor, request: Request):
     # Transmitir a todos los clientes web conectados al Dashboard
     await manager.broadcast({
         "type": "NEW_READING",
-        "payload": resultado
+        "payload": resultado,
+        "explicacion_ia": texto_ia
     })
 
     return resultado
 
+
+@app.post("/api/predict")
+async def predict_sensor_data(lectura: LecturaSensor, request: Request):
+    """
+    Endpoint principal para recibir datos desde el ESP32.
+    Protegido con la cabecera X-API-Key comparada con API_KEY_ESP32 del .env.
+    """
+    api_key_header = request.headers.get("X-API-Key")
+    if not API_KEY_ESP32 or api_key_header != API_KEY_ESP32:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Unauthorized: API Key inválida o ausente en cabecera X-API-Key"}
+        )
+
+    datos_dict = lectura.model_dump() if hasattr(lectura, "model_dump") else lectura.dict()
+    ip_cliente = request.client.host if request.client else "local"
+    return await procesar_inferencia_completa(datos_dict, ip_cliente, lectura.device_id)
+
+
+@app.get("/api/explicar")
+async def api_explicar():
+    """
+    Solicita a Gemini una explicación de 2 a 3 frases sobre la última inferencia registrada.
+    """
+    global ultima_explicacion_ia
+    if historial.historial_graficas:
+        ultima_inf = historial.historial_graficas[-1]
+        datos = ultima_inf.get("readings", {}).copy()
+        datos["prediccion"] = ultima_inf.get("fire_alarm", 0)
+        datos["probabilidad"] = ultima_inf.get("probability_fire", 0.0)
+    elif historial.ultima_lectura:
+        datos = historial.ultima_lectura.copy()
+        datos["prediccion"] = 0
+        datos["probabilidad"] = 0.0
+    else:
+        datos = {
+            "temperature": 24.0, "humidity": 50.0, "tvoc": 10.0, "eco2": 400.0,
+            "pm2_5": 0.05, "raw_aire": 1260, "prediccion": 0, "probabilidad": 0.0
+        }
+
+    texto = await asyncio.to_thread(consultar_gemini_explicacion, datos)
+    ultima_explicacion_ia = texto
+
+    # Difundir a clientes WebSocket conectados
+    await manager.broadcast({
+        "type": "EXPLICACION_IA",
+        "explicacion_ia": texto
+    })
+
+    return {
+        "status": "ok",
+        "explicacion_ia": texto
+    }
+
+
 @app.get("/api/history")
 def get_history():
     return list(historial.historial_graficas)
+
 
 # Datos de muestra del dataset original para simular con exactitud
 MUESTRAS_LIMPIAS = [
@@ -421,13 +580,12 @@ indice_fuego = 0
 @app.get("/api/simulate/{scenario}")
 async def simulate(scenario: str, request: Request):
     """
-    Permite probar el sistema directamente desde el navegador sin hardware conectado.
+    Permite probar el sistema directamente desde el navegador o pruebas sin cabecera de hardware.
     """
     global indice_clean, indice_fuego
     if scenario == "fire":
         base = MUESTRAS_FUEGO[indice_fuego % len(MUESTRAS_FUEGO)].copy()
         indice_fuego += 1
-        # Pequeña variación estocástica
         base["tvoc"] += np.random.uniform(-20, 20)
         base["pm2_5"] += np.random.uniform(-0.1, 0.2)
     else:
@@ -437,8 +595,8 @@ async def simulate(scenario: str, request: Request):
         base["humidity"] += np.random.uniform(-0.5, 0.5)
 
     base["device_id"] = "SIMULADOR_WEB"
-    lectura = LecturaSensor(**base)
-    return await predict_sensor_data(lectura, request)
+    ip_cliente = request.client.host if request.client else "local"
+    return await procesar_inferencia_completa(base, ip_cliente, "SIMULADOR_WEB")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -450,7 +608,8 @@ async def websocket_endpoint(websocket: WebSocket):
             "local_ip": LOCAL_IP,
             "port": PORT,
             "endpoint": f"http://{LOCAL_IP}:{PORT}/api/predict",
-            "history": list(historial.historial_graficas)
+            "history": list(historial.historial_graficas),
+            "explicacion_ia": ultima_explicacion_ia
         })
         while True:
             # Mantener conexión viva
@@ -470,67 +629,21 @@ async def polling_esp32_ap():
     """
     Si la PC se conecta al Wi-Fi 'ML' del ESP32, esta tarea lee los sensores
     desde http://192.168.4.1/api/sensors automaticamente y manda la prediccion.
+    (Vía de consulta interna que no requiere cabecera de autenticación).
     """
     await asyncio.sleep(2)
     while True:
         try:
-            # Consultar en hilo separado para no bloquear el bucle de eventos
             def fetch_data():
                 return requests.get("http://192.168.4.1/api/sensors", timeout=0.8)
 
             resp = await asyncio.to_thread(fetch_data)
             if resp.status_code == 200:
                 data = resp.json()
-                lectura = LecturaSensor(**data)
-                datos_dict = lectura.model_dump()
-                df_features, features_calc = historial.procesar_lectura(datos_dict)
-
-                prediccion = int(modelo.predict(df_features)[0])
-                
-                t0 = time.perf_counter()
-                probabilidad = 1.0 if prediccion == 1 else 0.0
-                if hasattr(modelo, "predict_proba"):
-                    try:
-                        probabilidad = float(modelo.predict_proba(df_features)[0][1])
-                    except Exception:
-                        pass
-                latencia_ms = (time.perf_counter() - t0) * 1000.0
-
-                hora_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                raw_aire_val = data.get("raw_aire", data.get("rawAire"))
-
-                registrar_inferencia_csv(
-                    timestamp=hora_actual,
-                    ip_origen="192.168.4.1",
-                    temperature=float(data.get("temperature", 0.0)),
-                    humidity=float(data.get("humidity", 0.0)),
-                    raw_aire=float(raw_aire_val) if raw_aire_val is not None else None,
-                    tvoc=float(data.get("tvoc", 0.0)),
-                    pm2_5=float(data.get("pm2_5", data.get("pm25", 0.0))),
-                    eco2=float(data.get("eco2", 0.0)),
-                    tvoc_mean_5=float(features_calc.get("tvoc_mean_5", 0.0)),
-                    prediccion=prediccion,
-                    probabilidad=probabilidad,
-                    latencia_ms=latencia_ms
-                )
-
-                resultado = {
-                    "status": "ok",
-                    "fire_alarm": prediccion,
-                    "alarm_active": bool(prediccion == 1),
-                    "probability_fire": round(probabilidad, 4),
-                    "action": "TRIGGER_BUZZER_AND_LED" if prediccion == 1 else "NORMAL_MONITORING",
-                    "message": "PELIGRO: Humo o combustión detectada!" if prediccion == 1 else "Aire limpio / Condiciones normales",
-                    "timestamp": hora_actual,
-                    "origin_ip": "192.168.4.1",
-                    "device_id": data.get("device_id", "ESP32_AP_ML"),
-                    "readings": datos_dict
-                }
-
-                historial.historial_graficas.append(resultado)
-                await manager.broadcast({"type": "NEW_READING", "payload": resultado})
+                resultado = await procesar_inferencia_completa(data, "192.168.4.1", data.get("device_id", "ESP32_AP_ML"))
 
                 # Notificar al ESP32 para activar o silenciar buzzer/LEDs
+                prediccion = resultado.get("fire_alarm", 0)
                 def send_alarm():
                     requests.get(f"http://192.168.4.1/set_alarm?fire={prediccion}", timeout=0.6)
                 await asyncio.to_thread(send_alarm)

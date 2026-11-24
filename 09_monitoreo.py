@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import math
+import argparse
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -21,10 +22,10 @@ BASE_DIR = Path(__file__).resolve().parent
 DIR_MONITOREO = BASE_DIR / "monitoreo"
 DIR_MONITOREO.mkdir(parents=True, exist_ok=True)
 
-RUTA_REGISTRO = DIR_MONITOREO / "registro_inferencias.csv"
+RUTA_REGISTRO_DEFECTO = DIR_MONITOREO / "registro_sesion_informe.csv"
+RUTA_SALIDA_DEFECTO = DIR_MONITOREO / "salida_09_reproducida.txt"
 RUTA_TRAIN = BASE_DIR / "data_procesada" / "smoke_detection_features.csv"
 RUTA_MODELO = BASE_DIR / "modelos" / "modelo_mejor_validacion.joblib"
-RUTA_SALIDA_TXT = DIR_MONITOREO / "salida_09.txt"
 
 FEATURE_NAMES = [
     "Temperature[C]",
@@ -69,14 +70,14 @@ COLUMNAS_REGISTRO = [
 # ====================================================================
 # VALIDACIÓN DE REGISTRO DE DATOS REALES
 # ====================================================================
-def validar_archivo_registro():
+def validar_archivo_registro(ruta_reg: Path):
     """
     Verifica que el archivo de inferencias reales del ESP32 exista
     y contenga datos antes de iniciar la auditoría.
     """
-    if not RUTA_REGISTRO.exists() or os.path.getsize(RUTA_REGISTRO) == 0:
+    if not ruta_reg.exists() or os.path.getsize(ruta_reg) == 0:
         raise FileNotFoundError(
-            f"[!] Error: No se encontró el archivo de registro en {RUTA_REGISTRO}. "
+            f"[!] Error: No se encontró el archivo de registro en {ruta_reg}. "
             "Asegúrese de generar lecturas con el ESP32 o el servidor antes de auditar."
         )
 
@@ -148,8 +149,26 @@ def obtener_racha_maxima(df, col):
 # ====================================================================
 # PROGRAMA PRINCIPAL DE AUDITORÍA Y MONITOREO
 # ====================================================================
-def ejecutar_monitoreo():
-    validar_archivo_registro()
+def ejecutar_monitoreo(ruta_reg_path=None, ruta_salida_path=None):
+    if ruta_reg_path is None or ruta_salida_path is None:
+        parser = argparse.ArgumentParser(description="Monitoreo y auditoría de inferencia y drift (09_monitoreo.py)")
+        parser.add_argument(
+            "--registro",
+            type=str,
+            default=str(RUTA_REGISTRO_DEFECTO),
+            help="Ruta al archivo CSV de inferencias (por defecto: monitoreo/registro_sesion_informe.csv)"
+        )
+        parser.add_argument(
+            "--salida",
+            type=str,
+            default=str(RUTA_SALIDA_DEFECTO),
+            help="Ruta al archivo TXT de salida (por defecto: monitoreo/salida_09_reproducida.txt)"
+        )
+        args, _ = parser.parse_known_args()
+        ruta_reg_path = Path(args.registro)
+        ruta_salida_path = Path(args.salida)
+
+    validar_archivo_registro(ruta_reg_path)
 
     salida_texto = []
 
@@ -158,7 +177,7 @@ def ejecutar_monitoreo():
         salida_texto.append(str(texto))
 
     # Cargar datos
-    df_live = pd.read_csv(RUTA_REGISTRO)
+    df_live = pd.read_csv(ruta_reg_path)
     df_train = pd.read_csv(RUTA_TRAIN)
 
     df_live["ts_dt"] = pd.to_datetime(df_live["timestamp"])
@@ -413,13 +432,13 @@ def ejecutar_monitoreo():
     archivos_generados.append(str(ruta_g3))
     registrar(f"  [OK] Guardado: {ruta_g3.name}")
 
-    # Guardar en salida_09.txt
-    archivos_generados.append(str(RUTA_SALIDA_TXT))
-    archivos_generados.append(str(RUTA_REGISTRO))
-    with open(RUTA_SALIDA_TXT, "w", encoding="utf-8") as f:
+    # Guardar en archivo de salida
+    archivos_generados.append(str(ruta_salida_path))
+    archivos_generados.append(str(ruta_reg_path))
+    with open(ruta_salida_path, "w", encoding="utf-8") as f:
         f.write("\n".join(salida_texto) + "\n")
 
-    registrar(f"  [OK] Salida de consola guardada en: {RUTA_SALIDA_TXT.name}")
+    registrar(f"  [OK] Salida de consola guardada en: {ruta_salida_path.name}")
     registrar("\n" + "=" * 85)
     registrar("EJECUCIÓN DE 09_MONITOREO.PY COMPLETADA CON ÉXITO")
     registrar("=" * 85)

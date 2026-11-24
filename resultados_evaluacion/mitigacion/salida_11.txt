@@ -1,0 +1,120 @@
+=====================================================================================
+TAREA 2: MODELOS MITIGADOS SIN PRESSURE[hPa] (11_modelo_mitigado.py)
+=====================================================================================
+
+1. CARGA DE PARTICIONES Y ELIMINACIÓN DE Pressure[hPa]
+-----------------------------------------------------------------
+Variables seleccionadas (20): ['Temperature[C]', 'Humidity[%]', 'TVOC[ppb]', 'eCO2[ppm]', 'Raw H2', 'Raw Ethanol', 'PM1.0', 'PM2.5', 'NC0.5', 'NC1.0', 'NC2.5', 'pm_ratio', 'pm25_delta', 'tvoc_delta', 'eco2_delta', 'temp_delta', 'humidity_delta', 'pm25_mean_5', 'tvoc_mean_5', 'eco2_mean_5']
+
+2. ENTRENAMIENTO: ÁRBOL DE DECISIÓN (Sin Pressure[hPa])
+-----------------------------------------------------------------
+Fitting 5 folds for each of 20 candidates, totalling 100 fits
+
+Resultados Árbol de Decisión (Sin Presión):
+  - Mejores hiperparámetros: {'min_samples_split': 2, 'min_samples_leaf': 1, 'max_depth': 20, 'criterion': 'entropy', 'class_weight': 'balanced'}
+  - F1 Macro CV (5-fold)   : 0.9993
+  - F1 Macro en Validación : 0.9995
+  - Tiempo de entrenamiento: 28.53 s
+  [OK] Modelo guardado en: D:\UPAO 2026\CICLO 8\ML\Proyecto\Data set\archive (5)\modelos\decision_tree_sin_presion.joblib
+
+3. ENTRENAMIENTO: RANDOM FOREST (Sin Pressure[hPa])
+-----------------------------------------------------------------
+Fitting 5 folds for each of 20 candidates, totalling 100 fits
+
+Resultados Random Forest (Sin Presión):
+  - Mejores hiperparámetros: {'n_estimators': 200, 'min_samples_split': 2, 'min_samples_leaf': 2, 'max_features': 'log2', 'max_depth': None, 'class_weight': None}
+  - F1 Macro CV (5-fold)   : 0.9998
+  - F1 Macro en Validación : 0.9997
+  - Tiempo de entrenamiento: 871.87 s
+  [OK] Modelo guardado en: D:\UPAO 2026\CICLO 8\ML\Proyecto\Data set\archive (5)\modelos\random_forest_sin_presion.joblib
+
+4. EVALUACIÓN COMPARATIVA EN TEST (20 Variables, Sin Presión)
+-----------------------------------------------------------------
+
+--- Métricas en TEST: Árbol de Decisión (Sin Presión) ---
+  - Accuracy              : 0.9996
+  - Precision Macro       : 0.9995
+  - Recall Macro          : 0.9995
+  - F1 Macro              : 0.9995
+  - Recall Clase Alarma (1): 0.9997
+  - Falsos Negativos (FN) : 2
+  - Falsos Positivos (FP) : 2
+  - ROC-AUC               : 0.9995
+  - Latencia media por obs: 0.0008 ms
+  - Matriz de Confusión en TEST:
+                Pred 0 (Normal)   Pred 1 (Alarma)
+    Real 0 (Normal)  2679              2
+    Real 1 (Alarma)  2                 6712
+
+--- Métricas en TEST: Random Forest (Sin Presión) ---
+  - Accuracy              : 0.9999
+  - Precision Macro       : 0.9998
+  - Recall Macro          : 0.9999
+  - F1 Macro              : 0.9999
+  - Recall Clase Alarma (1): 0.9999
+  - Falsos Negativos (FN) : 1
+  - Falsos Positivos (FP) : 0
+  - ROC-AUC               : 1.0000
+  - Latencia media por obs: 0.0250 ms
+  - Matriz de Confusión en TEST:
+                Pred 0 (Normal)   Pred 1 (Alarma)
+    Real 0 (Normal)  2681              0
+    Real 1 (Alarma)  1                 6713
+
+5. TOP 8 DE IMPORTANCIA MDI (Feature Importances) - MODELOS SIN PRESIÓN
+-----------------------------------------------------------------
+
+Top 8 Importancia MDI - Árbol de Decisión (Sin Presión):
+Ranking  Variable               Importancia    Acumulada   
+--------------------------------------------------------
+1        tvoc_mean_5                0.3500         0.3500
+2        Humidity[%]                0.2480         0.5979
+3        Raw H2                     0.1035         0.7014
+4        Raw Ethanol                0.0793         0.7807
+5        TVOC[ppb]                  0.0741         0.8548
+6        NC0.5                      0.0524         0.9072
+7        Temperature[C]             0.0430         0.9502
+8        eCO2[ppm]                  0.0342         0.9845
+
+Top 8 Importancia MDI - Random Forest (Sin Presión):
+Ranking  Variable               Importancia    Acumulada   
+--------------------------------------------------------
+1        tvoc_mean_5                0.1822         0.1822
+2        TVOC[ppb]                  0.1748         0.3570
+3        Raw Ethanol                0.1588         0.5157
+4        Humidity[%]                0.1371         0.6529
+5        Raw H2                     0.0848         0.7376
+6        Temperature[C]             0.0416         0.7792
+7        NC0.5                      0.0404         0.8195
+8        pm25_mean_5                0.0337         0.8533
+
+6. VALIDACIÓN CRUZADA LEAVE-ONE-GROUP-OUT (LOGO) - MODELOS SIN PRESIÓN
+-----------------------------------------------------------------
+
+--- LOGO por Sesiones: Árbol de Decisión (Sin Pressure[hPa]) ---
+Sesión   N Total    Clase 0    Clase 1    F1 Macro     Recall Alarma    FN      FP      Observación         
+------------------------------------------------------------------------------------------------------
+0        24994      3178       21816      0.2614       0.1636           18246   204     Biclase             
+1        24994      3178       21816      0.2370       0.1261           19066   0       Biclase             
+2        1154       33         1121       0.2654       0.3301           751     17      Biclase             
+3        5744       5742       2          0.4103       1.0000           0       1766    Biclase             
+4        5744       5742       2          0.3022       1.0000           0       3262    Biclase             
+------------------------------------------------------------------------------------------------------
+PROMEDIO                                   0.2952           0.5240     7612.6 1049.8   Acc prom=0.3916
+
+--- LOGO por Sesiones: Random Forest (Sin Pressure[hPa]) ---
+Sesión   N Total    Clase 0    Clase 1    F1 Macro     Recall Alarma    FN      FP      Observación         
+------------------------------------------------------------------------------------------------------
+0        24994      3178       21816      0.3864       0.3120           15009   3       Biclase             
+1        24994      3178       21816      0.6594       0.7017           6508    0       Biclase             
+2        1154       33         1121       0.0683       0.0419           1074    1       Biclase             
+3        5744       5742       2          0.4834       0.0000           2       368     Biclase             
+4        5744       5742       2          0.4943       0.0000           2       127     Biclase             
+------------------------------------------------------------------------------------------------------
+PROMEDIO                                   0.4184           0.2111     4519.0   99.8   Acc prom=0.6241
+
+  [OK] Salida completa guardada en: D:\UPAO 2026\CICLO 8\ML\Proyecto\Data set\archive (5)\resultados_evaluacion\mitigacion\salida_11.txt
+
+=====================================================================================
+EJECUCIÓN DE 11_MODELO_MITIGADO.PY COMPLETADA EXITOSAMENTE
+=====================================================================================

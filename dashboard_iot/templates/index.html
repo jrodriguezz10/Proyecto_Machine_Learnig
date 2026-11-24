@@ -478,8 +478,9 @@
         <h1>
           Monitor de Calidad de Aire & Detección de Fuego
           <span class="badge-course">UPAO - Ciclo 8</span>
+          <span class="badge-experimental" style="font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:6px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;margin-left:8px;vertical-align:middle;">Prototipo académico experimental</span>
         </h1>
-        <p>Inferencia en Tiempo Real • Modelo: <strong>DecisionTreeClassifier</strong> (F1: 100%)</p>
+        <p>Inferencia en Tiempo Real • Modelo: <strong>DecisionTreeClassifier</strong></p>
       </div>
     </div>
 
@@ -502,7 +503,7 @@
         </div>
         <div class="strip-text-group">
           <h2 id="status-title">Condición Ambiental Normal</h2>
-          <p id="status-desc">Valores estables de material particulado y gases. Sin presencia de humo.</p>
+          <p id="status-desc">Valores estables de calidad de aire. Sin presencia de humo.</p>
         </div>
       </div>
 
@@ -585,9 +586,9 @@
           <span>Sensor Aire (AOUT)</span>
           <svg stroke="var(--safe-color)" viewBox="0 0 24 24"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/></svg>
         </div>
-        <div class="card-number" id="val-raw">1260</div>
+        <div class="card-number" id="val-raw">—</div>
         <div class="card-unit">ADC GPIO 34 (0-4095)</div>
-        <div class="card-track"><div id="bar-raw" class="card-bar" style="background:var(--safe-color);width:32%;"></div></div>
+        <div class="card-track"><div id="bar-raw" class="card-bar" style="background:var(--safe-color);width:0%;"></div></div>
       </div>
     </section>
 
@@ -619,6 +620,23 @@
         <div class="chart-canvas-box">
           <canvas id="chartClima"></canvas>
         </div>
+      </div>
+    </section>
+
+    <!-- PANEL EXPLICACIÓN IA (GEMINI) -->
+    <section class="table-card" style="margin-bottom: 24px; padding: 20px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div class="table-title" style="margin:0; display:flex; align-items:center; gap:8px;">
+          <svg width="20" height="20" fill="none" stroke="#2563eb" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14h-2v-2h2zm0-4h-2V7h2z"/></svg>
+          Explicación IA (Gemini)
+        </div>
+        <button id="btn-explicar" onclick="solicitarExplicacionIA()" style="background:#2563eb; color:#fff; border:none; padding:7px 16px; border-radius:6px; font-weight:600; cursor:pointer; font-size:0.85rem;">Explicar ahora</button>
+      </div>
+      <div id="texto-explicacion-ia" style="font-size:0.95rem; line-height:1.5; color:#334155; background:#f8fafc; padding:14px; border-radius:8px; border:1px solid #e2e8f0; min-height:48px;">
+        Esperando eventos o solicita una explicación manual con el botón.
+      </div>
+      <div style="margin-top:8px; font-size:0.75rem; color:#64748b;">
+        * Nota: Prototipo experimental. Las interpretaciones de IA asisten pero no reemplazan sistemas de detección de incendios certificados.
       </div>
     </section>
 
@@ -819,6 +837,11 @@
           const msg = JSON.parse(event.data);
           if (msg.type === 'NEW_READING') {
             updateDashboard(msg.payload);
+            if (msg.payload && msg.payload.explicacion_ia) {
+              document.getElementById('texto-explicacion-ia').innerText = msg.payload.explicacion_ia;
+            }
+          } else if (msg.type === 'EXPLICACION_IA') {
+            document.getElementById('texto-explicacion-ia').innerText = msg.explicacion_ia;
           } else if (msg.type === 'INIT' && msg.history) {
             msg.history.forEach(item => updateDashboard(item));
           }
@@ -851,7 +874,7 @@
         iconBox.className = "strip-icon-box danger";
         iconBox.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>';
         title.innerText = "Alerta: Detección de Humo o Combustión";
-        desc.innerText = "El modelo identificó una concentración crítica de material particulado y gases.";
+        desc.innerText = "El modelo identificó una concentración elevada de gases detectada por el sensor MP503.";
         prob.style.color = "var(--fire-color)";
         prob.innerText = `${(payload.probability_fire * 100).toFixed(1)}%`;
         act.className = "actuator-tag danger";
@@ -861,7 +884,7 @@
         iconBox.className = "strip-icon-box safe";
         iconBox.innerHTML = '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>';
         title.innerText = "Condición Ambiental Normal";
-        desc.innerText = "Valores estables de material particulado y gases. Sin presencia de humo.";
+        desc.innerText = "Valores estables de calidad de aire. Sin presencia de humo.";
         prob.style.color = "var(--safe-color)";
         prob.innerText = `${(payload.probability_fire * 100).toFixed(1)}%`;
         act.className = "actuator-tag safe";
@@ -876,7 +899,7 @@
       const eco2 = parseFloat(r.eco2 || 400);
       const temp = parseFloat(r.temperature || 30.8);
       const hum = parseFloat(r.humidity || 54.0);
-      const raw = parseInt(r.raw_aire || 1260);
+      const raw = (r.raw_aire !== undefined && r.raw_aire !== null && r.raw_aire !== "") ? parseInt(r.raw_aire) : null;
 
       document.getElementById('val-pm25').innerText = pm25.toFixed(2);
       document.getElementById('bar-pm25').style.width = Math.min((pm25 / 5.0) * 100, 100) + '%';
@@ -893,8 +916,8 @@
       document.getElementById('val-hum').innerText = hum.toFixed(1) + '%';
       document.getElementById('bar-hum').style.width = Math.min(hum, 100) + '%';
 
-      document.getElementById('val-raw').innerText = raw;
-      document.getElementById('bar-raw').style.width = Math.min((raw / 3500) * 100, 100) + '%';
+      document.getElementById('val-raw').innerText = (raw !== null && !isNaN(raw)) ? raw : '—';
+      document.getElementById('bar-raw').style.width = (raw !== null && !isNaN(raw)) ? Math.min((raw / 3500) * 100, 100) + '%' : '0%';
 
       // Actualizar Gráficas Chart.js en tiempo real
       if (timeLabels.length >= maxDataPoints) {
@@ -932,6 +955,23 @@
       tbody.insertBefore(tr, tbody.firstChild);
       if (tbody.children.length > 20) {
         tbody.removeChild(tbody.lastChild);
+      }
+    }
+
+    async function solicitarExplicacionIA() {
+      const btn = document.getElementById('btn-explicar');
+      const txt = document.getElementById('texto-explicacion-ia');
+      btn.disabled = true;
+      btn.innerText = 'Consultando...';
+      try {
+        const res = await fetch('/api/explicar');
+        const data = await res.json();
+        txt.innerText = data.explicacion || data.error || 'Sin respuesta';
+      } catch(e) {
+        txt.innerText = 'Error al consultar explicación IA: ' + e.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Explicar ahora';
       }
     }
 

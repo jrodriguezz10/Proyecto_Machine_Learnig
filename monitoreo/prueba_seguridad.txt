@@ -1,0 +1,25 @@
+======================================================================
+PRUEBA DE SEGURIDAD - AUTENTICACIÓN X-API-Key EN /api/predict
+======================================================================
+
+1. POST /api/predict SIN cabecera X-API-Key:
+   Código HTTP recibido : 401
+   Resultado esperado    : 401 Unauthorized
+   Cuerpo de la respuesta: {"detail":"Unauthorized: API Key inválida o ausente en cabecera X-API-Key"}
+   Validación            : EXITOSA (401)
+
+2. POST /api/predict CON cabecera X-API-Key INVÁLIDA:
+   Código HTTP recibido : 401
+   Resultado esperado    : 401 Unauthorized
+   Cuerpo de la respuesta: {"detail":"Unauthorized: API Key inválida o ausente en cabecera X-API-Key"}
+   Validación            : EXITOSA (401)
+
+3. POST /api/predict CON cabecera X-API-Key VÁLIDA:
+   Código HTTP recibido : 200
+   Resultado esperado    : 200 OK
+   Cuerpo de la respuesta: {"status":"ok","fire_alarm":0,"alarm_active":false,"probability_fire":0.0,"latencia_ms":17.9634,"action":"NORMAL_MONITORING","message":"Aire limpio / Condiciones normales","timestamp":"2026-11-24 13:40:16","origin_ip":"127.0.0.1","device_id":"TEST_SECURITY","readings":{"temperature":25.0,"humidity":50.0,"tvoc":15.0,"eco2":410.0,"raw_h2":12500.0,"raw_ethanol":18700.0,"pressure":939.5,"pm1_0":0.05,"pm2_5":0.05,"pm25":null,"nc0_5":0.1,"nc1_0":0.02,"nc2_5":0.005,"raw_aire":1280.0,"device_id":"TEST_SECURITY"},"explicacion_ia":"Esperando inferencias del sistema..."}
+   Validación            : EXITOSA (200)
+
+4. GET /api/health (Endpoint público sin clave):
+   Código HTTP recibido : 200
+   Validación            : ACCESO PÚBLICO CORRECTO (200)

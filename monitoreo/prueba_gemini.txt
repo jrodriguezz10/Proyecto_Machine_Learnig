@@ -1,0 +1,14 @@
+======================================================================
+PRUEBA DE SERVICIO COGNITIVO GEMINI - /api/simulate/fire Y /api/explicar
+======================================================================
+
+1. Inferencia disparada con GET /api/simulate/fire:
+   Código HTTP : 200
+   Respuesta   : {"status":"ok","fire_alarm":1,"alarm_active":true,"probability_fire":1.0,"latencia_ms":1.3587,"action":"TRIGGER_BUZZER_AND_LED","message":"PELIGRO: Humo o combustión detectada!","timestamp":"2026-11-24 13:40:16","origin_ip":"127.0.0.1","device_id":"SIMULADOR_WEB","readings":{"temperature":15.2,"humidity":52.8,"tvoc":867.6493784830286,"eco2":520.0,"raw_h2":13340.0,"raw_ethanol":20160.0,"pressure":939.5,"pm1_0":2.15,"pm2_5":2.3014982236959205,"nc0_5":14.8,"nc1_0":2.31,"nc2_5":0.052,"device_id":"SIMULADOR_WEB"},"explicacion_ia":"El sistema ha detectado una concentración inusualmente elevada de gases volátiles (TVOC) en el ambiente, lo que indica un posible proceso de combustión temprana. Debido a estos valores, el nivel de riesgo actual es **crítico**, con un 100% de probabilidad de peligro de incendio según el modelo de análisis. Le recomendamos inspeccionar la zona de inmediato con precaución y evacuar el lugar preventivamente si percibe olor a quemado o cualquier presencia visible de humo."}
+
+2. Consulta a GET /api/explicar:
+   Código HTTP : 200
+   Respuesta   : {"status":"ok","explicacion_ia":"El sistema ha detectado una elevación crítica en los niveles de gases volátiles en el aire, lo que indica una posible combustión temprana en el ambiente. Debido a este hallazgo, el nivel de riesgo actual es de peligro inminente de incendio con un diagnóstico de alerta máxima. Se recomienda inspeccionar el área de inmediato en busca de posibles fuentes de origen y evacuar el lugar preventivamente si percibe cualquier anomalía."}
+
+3. Texto explicativo generado por Gemini:
+   "El sistema ha detectado una elevación crítica en los niveles de gases volátiles en el aire, lo que indica una posible combustión temprana en el ambiente. Debido a este hallazgo, el nivel de riesgo actual es de peligro inminente de incendio con un diagnóstico de alerta máxima. Se recomienda inspeccionar el área de inmediato en busca de posibles fuentes de origen y evacuar el lugar preventivamente si percibe cualquier anomalía."
